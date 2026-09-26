@@ -10,6 +10,7 @@ from db.models import init_db, SessionLocal, RawCustomer, ProcessedCustomer, Clu
 from ml.preprocessing import DataPreprocessor
 from ml.clustering import CustomerClusterer
 from ml.classification import ChurnResponseClassifier
+from load_data import load_csv_to_db
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODELS_DIR = os.path.join(BASE_DIR, "..", "models")
@@ -30,6 +31,19 @@ init_db()
 @app.get("/")
 def root():
     return {"message": "Purchasing Behavior for Targeted Marketing API is running"}
+
+
+@app.post("/load-data")
+def load_data_endpoint():
+    """Loads the CSV file into the raw_customers table (safe to call multiple times)."""
+    try:
+        load_csv_to_db()
+        session = SessionLocal()
+        count = session.query(RawCustomer).count()
+        session.close()
+        return {"message": "Data loading completed", "total_raw_customers": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/data/summary")
