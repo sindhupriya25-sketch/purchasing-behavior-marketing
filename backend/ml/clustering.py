@@ -72,7 +72,7 @@ class CustomerClusterer:
 
         for _, row in df.iterrows():
             assignment = ClusterAssignment(
-                processed_customer_id=row["id"],
+                processed_customer_id=int(row["id"]),
                 cluster_label=int(row["cluster_label"]),
                 k_value=k,
             )
