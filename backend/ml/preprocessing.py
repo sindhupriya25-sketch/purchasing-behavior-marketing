@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime
-from db.models import SessionLocal, RawCustomer, ProcessedCustomer, init_db
+from db.models import SessionLocal, RawCustomer, ProcessedCustomer, ClusterAssignment, init_db
 
 
 class DataPreprocessor:
@@ -44,13 +44,11 @@ class DataPreprocessor:
 
     def clean_data(self, df):
         """Handle missing values and remove unrealistic outliers."""
-        # Fill missing income with the median income
         median_income = df["income"].median()
         df["income"] = df["income"].fillna(median_income)
 
-        # Remove unrealistic outliers
-        df = df[df["income"] < 200000]          # extreme income outliers
-        df = df[df["year_birth"] > 1930]         # unrealistic birth years
+        df = df[df["income"] < 200000]
+        df = df[df["year_birth"] > 1930]
 
         return df
 
@@ -71,7 +69,6 @@ class DataPreprocessor:
 
         df["total_kids"] = df["kidhome"] + df["teenhome"]
 
-        # Customer tenure: days since they enrolled
         df["dt_customer_parsed"] = pd.to_datetime(df["dt_customer"], format="%d-%m-%Y", errors="coerce")
         df["customer_tenure_days"] = (datetime.now() - df["dt_customer_parsed"]).dt.days
 
@@ -79,14 +76,16 @@ class DataPreprocessor:
 
     def save_processed_data(self, df):
         """Write the cleaned + engineered data into the processed_customers table."""
-        # Clear old processed data first (so re-running doesn't duplicate)
+        # Delete cluster assignments FIRST (child table), then processed customers (parent table).
+        # This respects the foreign key relationship and works correctly on both SQLite and PostgreSQL.
+        self.session.query(ClusterAssignment).delete()
         self.session.query(ProcessedCustomer).delete()
         self.session.commit()
 
         inserted = 0
         for _, row in df.iterrows():
             processed = ProcessedCustomer(
-                raw_customer_id=row["id"],
+                raw_customer_id=int(row["id"]),
                 age=row["age"],
                 income=row["income"],
                 total_spend=row["total_spend"],
@@ -127,7 +126,7 @@ class DataPreprocessor:
 
 
 if __name__ == "__main__":
-    init_db()  # ensures the new table gets created
+    init_db()
     preprocessor = DataPreprocessor()
     result_df = preprocessor.run_pipeline()
     print("\nSample of processed data:")
